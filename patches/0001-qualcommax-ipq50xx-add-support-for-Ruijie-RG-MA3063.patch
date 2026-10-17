@@ -1,4 +1,4 @@
-From 6dd860a67bab27bd0fa57be5f2d81fa696d5ffd0 Mon Sep 17 00:00:00 2001
+From 4feb9e630fd057bafc69426a2433a060e563c0ab Mon Sep 17 00:00:00 2001
 From: OpenWrt port <noreply@example.invalid>
 Date: Sat, 17 Oct 2026 21:15:42 +0700
 Subject: [PATCH] qualcommax: ipq50xx: add support for Ruijie RG-MA3063
@@ -44,12 +44,12 @@ Claude-Session: https://claude.ai/code/session_01CqXAQbYSDqUQToCJFM8bXZ
  package/firmware/ipq-wifi/Makefile            |   4 +-
  .../files/board-ruijie_rg-ma3063.ipq5018      | Bin 0 -> 131180 bytes
  .../files/board-ruijie_rg-ma3063.qcn6122      | Bin 0 -> 131180 bytes
- .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 388 ++++++++++++++++++
+ .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 393 ++++++++++++++++++
  target/linux/qualcommax/image/ipq50xx.mk      |  16 +
  .../ipq50xx/base-files/etc/board.d/02_network |   1 +
  .../etc/hotplug.d/firmware/11-ath11k-caldata  |  12 +
  .../base-files/lib/upgrade/platform.sh        |   3 +-
- 9 files changed, 423 insertions(+), 2 deletions(-)
+ 9 files changed, 428 insertions(+), 2 deletions(-)
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.ipq5018
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.qcn6122
  create mode 100644 target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
@@ -427,10 +427,10 @@ HcmV?d00001
 
 diff --git a/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
 new file mode 100644
-index 0000000..865a81a
+index 0000000..21b31ba
 --- /dev/null
 +++ b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
-@@ -0,0 +1,388 @@
+@@ -0,0 +1,393 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +/dts-v1/;
@@ -815,7 +815,12 @@ index 0000000..865a81a
 +	qcom,bdf-addr = <0x4d100000>;
 +	qcom,m3-dump-addr = <0x4df00000>;
 +
-+	ieee80211-freq-limit = <5150000 5730000>;
++	/*
++	 * Keep U-NII-3 reachable: with country ID the firmware's own
++	 * regulatory table only offers 5735-5815 MHz, so capping at 5730 MHz
++	 * leaves the radio with no channel at all.
++	 */
++	ieee80211-freq-limit = <5150000 5850000>;
 +
 +	status = "okay";
 +};
