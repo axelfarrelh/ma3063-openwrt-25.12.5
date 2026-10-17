@@ -1,4 +1,4 @@
-From f5a1dab9bdee1676d56faef0604139ba10eed6ea Mon Sep 17 00:00:00 2001
+From 6dd860a67bab27bd0fa57be5f2d81fa696d5ffd0 Mon Sep 17 00:00:00 2001
 From: OpenWrt port <noreply@example.invalid>
 Date: Sat, 17 Oct 2026 21:15:42 +0700
 Subject: [PATCH] qualcommax: ipq50xx: add support for Ruijie RG-MA3063
@@ -7,10 +7,13 @@ Ruijie RG-MA3063 is an AX3000 router, sold mainly as a China Mobile
 customised unit. Hardware is close to the CMCC PZ-L8.
 
 Specifications:
-- SoC: Qualcomm IPQ5018 (MP03.5-C1 reference), dual-core A53
+- SoC: Qualcomm IPQ5018 (board AP-MP02.1), dual-core A53
 - RAM: 256 MiB DDR3
 - Flash: 128 MiB SPI-NAND (Winbond, Macronix or FudanMicro FM25S01A)
-- Ethernet: 4x 1GbE (1x WAN, 3x LAN) via QCA8337 over SGMII
+- Ethernet: 4x 1GbE
+  - socket 1 (next to the power jack): wan, IPQ5018 GE Phy (dp1)
+  - sockets 2, 3 and the one printed "WAN": lan1-lan3, QCA8337 over
+    SGMII (dp2)
 - WiFi 2.4 GHz: IPQ5018 2x2 802.11ax
 - WiFi 5 GHz: QCN6102 2x2 802.11ax
 - LEDs: status green/blue/red
@@ -19,7 +22,7 @@ Specifications:
 
 MAC addresses come from the U-Boot env (0:appsblenv, ethaddr):
 - LAN (dp2 conduit): ethaddr
-- WAN: ethaddr + 1
+- WAN (dp1): ethaddr + 1
 - 2.4 GHz: ethaddr + 2
 - 5 GHz: ethaddr + 3
 
@@ -33,17 +36,20 @@ Installation (UART):
    tftpboot 0x44000000 <squashfs-factory.ubi>
    flash rootfs; flash rootfs_1; reset
 Later upgrades use sysupgrade, which follows the QSDK A/B bootconfig.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+Claude-Session: https://claude.ai/code/session_01CqXAQbYSDqUQToCJFM8bXZ
 ---
  .../uboot-envtools/files/qualcommax_ipq50xx   |   1 +
  package/firmware/ipq-wifi/Makefile            |   4 +-
  .../files/board-ruijie_rg-ma3063.ipq5018      | Bin 0 -> 131180 bytes
  .../files/board-ruijie_rg-ma3063.qcn6122      | Bin 0 -> 131180 bytes
- .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 393 ++++++++++++++++++
+ .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 388 ++++++++++++++++++
  target/linux/qualcommax/image/ipq50xx.mk      |  16 +
  .../ipq50xx/base-files/etc/board.d/02_network |   1 +
  .../etc/hotplug.d/firmware/11-ath11k-caldata  |  12 +
  .../base-files/lib/upgrade/platform.sh        |   3 +-
- 9 files changed, 428 insertions(+), 2 deletions(-)
+ 9 files changed, 423 insertions(+), 2 deletions(-)
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.ipq5018
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.qcn6122
  create mode 100644 target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
@@ -421,10 +427,10 @@ HcmV?d00001
 
 diff --git a/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
 new file mode 100644
-index 0000000..f624130
+index 0000000..865a81a
 --- /dev/null
 +++ b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,388 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +/dts-v1/;
@@ -587,7 +593,7 @@ index 0000000..f624130
 +	switch_mac_mode = <MAC_MODE_SGMII_CHANNEL0>;
 +
 +	qcom,port_phyinfo {
-+		// MAC0 -> GE Phy --- MDI --- QCA8337 Phy4 (Port5), unused
++		// MAC0 -> GE Phy -> socket 1 next to the power jack (wan)
 +		port@0 {
 +			port_id = <1>;
 +			mdiobus = <&mdio0>;
@@ -605,13 +611,17 @@ index 0000000..f624130
 +};
 +
 +/*
-+ * The MAC0 <-> QCA8337 Port5 link is not wired up in this DTS (same as on
-+ * the CMCC PZ-L8): every user port goes through the SGMII conduit on dp2.
++ * Unlike the CMCC PZ-L8, the IPQ5018 GE Phy is wired straight to physical
++ * port 1 (closest to the power jack, also the port U-Boot uses for TFTP).
++ * It is used as WAN so routed traffic does not share the SGMII link with
++ * the LAN ports; the three QCA8337 ports (sockets 2, 3 and the one printed
++ * "WAN") become lan1-lan3.
 + */
 +&dp1 {
 +	status = "okay";
 +
-+	nvmem-cells = <&macaddr_appsblenv_ethaddr 4>;
++	label = "wan";
++	nvmem-cells = <&macaddr_appsblenv_ethaddr 1>;
 +	nvmem-cell-names = "mac-address";
 +};
 +
@@ -644,22 +654,22 @@ index 0000000..f624130
 +	reset-delay-us = <10000>;
 +	reset-post-delay-us = <150000>;
 +
-+	// QCA8337 Phy0 -> LAN3
++	// QCA8337 Phy0 -> socket 2 (lan1)
 +	qca8337_0: ethernet-phy@0 {
 +		reg = <0>;
 +	};
 +
-+	// QCA8337 Phy1 -> LAN2
++	// QCA8337 Phy1 -> socket 3 (lan2)
 +	qca8337_1: ethernet-phy@1 {
 +		reg = <1>;
 +	};
 +
-+	// QCA8337 Phy2 -> LAN1
++	// QCA8337 Phy2 -> socket printed "WAN" (lan3)
 +	qca8337_2: ethernet-phy@2 {
 +		reg = <2>;
 +	};
 +
-+	// QCA8337 Phy3 -> WAN
++	// QCA8337 Phy3 -> not wired to a socket
 +	qca8337_3: ethernet-phy@3 {
 +		reg = <3>;
 +	};
@@ -681,7 +691,7 @@ index 0000000..f624130
 +
 +			port@1 {
 +				reg = <1>;
-+				label = "lan3";
++				label = "lan1";
 +				phy-handle = <&qca8337_0>;
 +			};
 +
@@ -693,17 +703,8 @@ index 0000000..f624130
 +
 +			port@3 {
 +				reg = <3>;
-+				label = "lan1";
++				label = "lan3";
 +				phy-handle = <&qca8337_2>;
-+			};
-+
-+			port@4 {
-+				reg = <4>;
-+				label = "wan";
-+				phy-handle = <&qca8337_3>;
-+
-+				nvmem-cells = <&macaddr_appsblenv_ethaddr 1>;
-+				nvmem-cell-names = "mac-address";
 +			};
 +
 +			port@6 {
