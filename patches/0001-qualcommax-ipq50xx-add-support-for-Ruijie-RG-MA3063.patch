@@ -1,4 +1,4 @@
-From 4feb9e630fd057bafc69426a2433a060e563c0ab Mon Sep 17 00:00:00 2001
+From 6b7073c8497f4496979d534399eacc7f3981dd48 Mon Sep 17 00:00:00 2001
 From: OpenWrt port <noreply@example.invalid>
 Date: Sat, 17 Oct 2026 21:15:42 +0700
 Subject: [PATCH] qualcommax: ipq50xx: add support for Ruijie RG-MA3063
@@ -26,8 +26,10 @@ MAC addresses come from the U-Boot env (0:appsblenv, ethaddr):
 - 2.4 GHz: ethaddr + 2
 - 5 GHz: ethaddr + 3
 
-Both radios use firmware memory mode 1 with kmod-ath11k-smallbuffers
-because of the 256 MiB RAM.
+Both radios use firmware memory mode 1 because of the 256 MiB RAM.
+
+The FIT image carries both config@mp02.1 and config@mp03.5-c1 (same kernel
+and DTB): units in the field ship with U-Boot builds that look for either.
 
 Installation (UART):
 1. Interrupt U-Boot, set ipaddr/serverip and serve the image via TFTP.
@@ -44,12 +46,12 @@ Claude-Session: https://claude.ai/code/session_01CqXAQbYSDqUQToCJFM8bXZ
  package/firmware/ipq-wifi/Makefile            |   4 +-
  .../files/board-ruijie_rg-ma3063.ipq5018      | Bin 0 -> 131180 bytes
  .../files/board-ruijie_rg-ma3063.qcn6122      | Bin 0 -> 131180 bytes
- .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 393 ++++++++++++++++++
- target/linux/qualcommax/image/ipq50xx.mk      |  16 +
+ .../arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts | 392 ++++++++++++++++++
+ target/linux/qualcommax/image/ipq50xx.mk      |  30 ++
  .../ipq50xx/base-files/etc/board.d/02_network |   1 +
  .../etc/hotplug.d/firmware/11-ath11k-caldata  |  12 +
  .../base-files/lib/upgrade/platform.sh        |   3 +-
- 9 files changed, 428 insertions(+), 2 deletions(-)
+ 9 files changed, 441 insertions(+), 2 deletions(-)
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.ipq5018
  create mode 100644 package/firmware/ipq-wifi/files/board-ruijie_rg-ma3063.qcn6122
  create mode 100644 target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
@@ -427,10 +429,10 @@ HcmV?d00001
 
 diff --git a/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
 new file mode 100644
-index 0000000..21b31ba
+index 0000000..578f0c8
 --- /dev/null
 +++ b/target/linux/qualcommax/files/arch/arm64/boot/dts/qcom/ipq5018-rg-ma3063.dts
-@@ -0,0 +1,393 @@
+@@ -0,0 +1,392 @@
 +// SPDX-License-Identifier: GPL-2.0-or-later OR MIT
 +
 +/dts-v1/;
@@ -785,10 +787,9 @@ index 0000000..21b31ba
 +};
 +
 +/*
-+ * 256 MiB RAM: run both radios in the reduced firmware memory mode and pair
-+ * this with kmod-ath11k-smallbuffers. The CMCC PZ-L8 (same platform, same
-+ * RAM) ships with Wi-Fi disabled upstream because of OOM under LuCI; keep
-+ * the package set lean on this device.
++ * 256 MiB RAM: run both radios in the reduced firmware memory mode. The
++ * CMCC PZ-L8 (same platform, same RAM) ships with Wi-Fi disabled upstream
++ * because of OOM under LuCI; keep the package set lean on this device.
 + */
 +&q6v5_wcss {
 +	status = "okay";
@@ -825,16 +826,30 @@ index 0000000..21b31ba
 +	status = "okay";
 +};
 diff --git a/target/linux/qualcommax/image/ipq50xx.mk b/target/linux/qualcommax/image/ipq50xx.mk
-index 7fab522..12364a3 100644
+index 7fab522..6d17cda 100644
 --- a/target/linux/qualcommax/image/ipq50xx.mk
 +++ b/target/linux/qualcommax/image/ipq50xx.mk
-@@ -165,6 +165,22 @@ define Device/linksys_spnmx56
+@@ -165,6 +165,36 @@ define Device/linksys_spnmx56
  endef
  TARGET_DEVICES += linksys_spnmx56
  
++# Duplicate the FIT configuration node under another name, so a single image
++# boots with vendor U-Boots that look for different board configurations.
++define Build/fit-its-add-config
++	awk -v src="$(DEVICE_DTS_CONFIG)" -v dst="$(1)" \
++		'$$1 == src && $$2 == "{" { grab = 1 } { print } grab { blk = blk $$0 "\n" } grab && $$1 == "};" { grab = 0; sub(src, dst, blk); printf "%s", blk }' \
++		$@.its > $@.its.new
++	@mv $@.its.new $@.its
++endef
++
 +define Device/ruijie_rg-ma3063
 +	$(call Device/FitImageLzma)
 +	$(call Device/UbiFit)
++	# Depending on the U-Boot build, units look for mp02.1 or mp03.5-c1
++	KERNEL = kernel-bin | lzma | \
++		fit-its lzma $$(KDIR)/image-$$(DEVICE_DTS).dtb | \
++		fit-its-add-config config@mp03.5-c1 | \
++		fit-image lzma $$(KDIR)/image-$$(DEVICE_DTS).dtb
 +	DEVICE_VENDOR := Ruijie
 +	DEVICE_MODEL := RG-MA3063
 +	DEVICE_DTS_CONFIG := config@mp02.1
@@ -843,8 +858,8 @@ index 7fab522..12364a3 100644
 +	PAGESIZE := 2048
 +	IMAGE_SIZE := 51200k
 +	NAND_SIZE := 128m
-+	DEVICE_PACKAGES := kmod-ath11k-smallbuffers \
-+		ath11k-firmware-ipq5018-qcn6122 ipq-wifi-ruijie_rg-ma3063
++	DEVICE_PACKAGES := ath11k-firmware-ipq5018-qcn6122 \
++		ipq-wifi-ruijie_rg-ma3063
 +endef
 +TARGET_DEVICES += ruijie_rg-ma3063
 +
