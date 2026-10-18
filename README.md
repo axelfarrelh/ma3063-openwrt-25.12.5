@@ -51,7 +51,7 @@ Pastikan backup MTD lengkap tersimpan aman sebelum mulai.
 
 ### Langkah 0 — cek nama config FIT di U-Boot
 
-Image memakai `config@mp02.1` (sama seperti PZ-L8 dan port komunitas). U-Boot
+Image memakai `config@mp03.5-c1` (sama seperti PZ-L8 dan port komunitas). U-Boot
 QSDK memilih config berdasarkan nama, jadi cocokkan dulu. Dari firmware stock
 via SSH:
 
@@ -60,7 +60,7 @@ cat /proc/mtd                      # cari nomor mtd "0:APPSBL"
 strings /dev/mtdX | grep -o 'config@[a-z0-9.-]*' | sort -u
 ```
 
-Kalau yang muncul bukan `config@mp02.1` (misalnya `config@mp03.5-c1`), ubah
+Kalau yang muncul bukan `config@mp03.5-c1` (misalnya `config@mp02.1`), ubah
 `DEVICE_DTS_CONFIG` di patch (`target/linux/qualcommax/image/ipq50xx.mk`) lalu
 build ulang. Langkah 1 tetap aman walau nama ini salah.
 
